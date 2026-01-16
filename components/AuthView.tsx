@@ -1,35 +1,66 @@
 
 import React, { useState } from 'react';
-import { UserProfile } from '../types';
-import { mockUsers } from '../lib/mockData';
+import { auth, db } from '../lib/firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  sendPasswordResetEmail,
+  updateProfile,
+  sendEmailVerification
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react';
 
 interface AuthViewProps {
-  onLogin: (user: UserProfile) => void;
+  onLogin: () => void;
+  addToast: (text: string, type?: 'success' | 'info' | 'error') => void;
 }
 
-export const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
+export const AuthView: React.FC<AuthViewProps> = ({ addToast }) => {
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
       if (mode === 'register') {
-        alert("Bestätigungsemail gesendet! Bitte verifiziere dein Konto.");
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName: name });
+        await sendEmailVerification(userCredential.user);
+        
+        // Profil in Firestore anlegen
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          name,
+          email,
+          avatarUrl: `https://picsum.photos/seed/${userCredential.user.uid}/200`,
+          createdAt: new Date().toISOString()
+        });
+
+        addToast("Konto erstellt! Bitte prüfe deine E-Mails zur Verifizierung.", "info");
         setMode('login');
-        setIsLoading(false);
+      } else if (mode === 'forgot') {
+        await sendPasswordResetEmail(auth, email);
+        addToast("E-Mail zum Zurücksetzen wurde gesendet.", "success");
+        setMode('login');
       } else {
-        // Auto login with Max Mustermann for demo
-        onLogin(mockUsers[0]);
+        await signInWithEmailAndPassword(auth, email, password);
+        addToast("Willkommen zurück!", "success");
       }
-    }, 1500);
+    } catch (error: any) {
+      console.error(error);
+      let message = "Ein Fehler ist aufgetreten.";
+      if (error.code === 'auth/wrong-password') message = "Falsches Passwort.";
+      if (error.code === 'auth/user-not-found') message = "Benutzer nicht gefunden.";
+      if (error.code === 'auth/email-already-in-use') message = "E-Mail wird bereits verwendet.";
+      addToast(message, "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -38,7 +69,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
         <div className="flex flex-col items-center gap-3 mb-8">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-xl shadow-blue-200">TW</div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">TeamWallet</h1>
-          <p className="text-slate-500 font-medium">Gemeinsam besser wirtschaften.</p>
+          <p className="text-slate-500 font-medium">Das digitale Strafen-Management.</p>
         </div>
 
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50">
@@ -125,7 +156,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
 
         <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-medium">
           <ShieldCheck size={14} />
-          Sichere 256-bit Verschlüsselung
+          Sichere Authentifizierung via Firebase
         </div>
       </div>
     </div>
