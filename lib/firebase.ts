@@ -3,19 +3,30 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-/**
- * WICHTIG: Ersetze diese Platzhalter durch deine echten Firebase-Projekt-Daten.
- * Du findest diese in der Firebase Console unter "Projekteinstellungen" -> "Meine Apps".
- */
+// Wir nutzen window.process, das wir in der index.html definiert haben
+const env = (window as any).process?.env || {};
+
 const firebaseConfig = {
-  apiKey: "AIzaSyAs-PLACEHOLDER", 
-  authDomain: "dein-projekt.firebaseapp.com",
-  projectId: "dein-projekt",
-  storageBucket: "dein-projekt.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  apiKey: env.FIREBASE_API_KEY || "AIzAIzaSyD9uSchp5FyqPVS2z1k68WGNiPWLkumMao", 
+  authDomain: env.FIREBASE_AUTH_DOMAIN || "teamwallet-1-16872633-ef31b.firebaseapp.com",
+  projectId: env.FIREBASE_PROJECT_ID || "teamwallet-1-16872633-ef31b",
+  storageBucket: env.FIREBASE_STORAGE_BUCKET || "teamwallet-1-16872633-ef31b.firebasestorage.app",
+  messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID || "82877579878",
+  appId: env.FIREBASE_APP_ID || "1:82877579878:web:1a69d7540ccbf8d8daa3a"
 };
 
-const app = initializeApp(firebaseConfig);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (e) {
+  console.error("Firebase App initialization failed. Using mock mode.", e);
+  // Fallback für Entwicklung ohne Firebase
+  app = { 
+    name: '[DEFAULT]', 
+    options: firebaseConfig, 
+    automaticDataCollectionEnabled: false 
+  } as any;
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);

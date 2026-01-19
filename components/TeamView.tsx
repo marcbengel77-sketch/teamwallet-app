@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile, Role, TeamMember, PenaltyCategory } from '../types';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { Shield, UserPlus, Settings, Trash2, Edit2, Check, Copy, Search, MoreVertical, Loader2, Plus, Info, X } from 'lucide-react';
+import { Shield, UserPlus, Settings, Trash2, Edit2, Check, Copy, Search, MoreVertical, Loader2, Plus, Info, X, Trophy } from 'lucide-react';
 
 interface TeamViewProps {
   activeTeamId: string;
@@ -82,7 +82,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ activeTeamId, currentUser, a
 
   return (
     <div className="space-y-6">
-      <div className="flex p-1 bg-slate-200/50 rounded-xl w-fit overflow-x-auto">
+      <div className="flex p-1 bg-slate-200/50 rounded-xl w-fit overflow-x-auto hide-scrollbar">
         <TabButton active={activeSubTab === 'members'} onClick={() => setActiveSubTab('members')} label="Mitglieder" />
         <TabButton active={activeSubTab === 'catalog'} onClick={() => setActiveSubTab('catalog')} label="Katalog" />
         {role === 'admin' && <TabButton active={activeSubTab === 'settings'} onClick={() => setActiveSubTab('settings')} label="Settings" />}
@@ -158,6 +158,24 @@ export const TeamView: React.FC<TeamViewProps> = ({ activeTeamId, currentUser, a
           </div>
         )}
 
+        {activeSubTab === 'create' && (
+          <div className="p-12 flex flex-col items-center justify-center text-center space-y-6">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 shadow-inner">
+              <Trophy size={32} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800">Noch ein Team gründen?</h3>
+              <p className="text-slate-500 text-sm max-w-sm mt-2 font-medium leading-relaxed">Du kannst jederzeit weitere Teams eröffnen. Jedes Team hat seine eigene Kasse und einen eigenen Strafenkatalog.</p>
+            </div>
+            <button 
+              onClick={() => (window as any).dispatchEvent(new CustomEvent('tw-open-create-team'))} 
+              className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition shadow-xl shadow-blue-100"
+            >
+              Neues Projekt starten
+            </button>
+          </div>
+        )}
+
         {/* Form Modal for Catalog */}
         {showAddCategory && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -169,17 +187,17 @@ export const TeamView: React.FC<TeamViewProps> = ({ activeTeamId, currentUser, a
               <form onSubmit={handleAddCategory} className="p-6 space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Bezeichnung</label>
-                  <input type="text" required value={newCat.name} onChange={(e) => setNewCat({...newCat, name: e.target.value})} placeholder="z.B. Tunnel kassiert" className="w-full p-3 rounded-xl bg-slate-100 border-none text-sm" />
+                  <input type="text" required value={newCat.name} onChange={(e) => setNewCat({...newCat, name: e.target.value})} placeholder="z.B. Tunnel kassiert" className="w-full p-3 rounded-xl bg-slate-100 border-none text-sm focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Betrag (€)</label>
-                  <input type="number" step="0.01" required value={newCat.amount} onChange={(e) => setNewCat({...newCat, amount: e.target.value})} placeholder="0.00" className="w-full p-3 rounded-xl bg-slate-100 border-none text-sm" />
+                  <input type="number" step="0.01" required value={newCat.amount} onChange={(e) => setNewCat({...newCat, amount: e.target.value})} placeholder="0.00" className="w-full p-3 rounded-xl bg-slate-100 border-none text-sm focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Beschreibung (Optional)</label>
-                  <textarea value={newCat.description} onChange={(e) => setNewCat({...newCat, description: e.target.value})} placeholder="Kurze Erklärung..." className="w-full p-3 rounded-xl bg-slate-100 border-none text-sm min-h-[80px]" />
+                  <textarea value={newCat.description} onChange={(e) => setNewCat({...newCat, description: e.target.value})} placeholder="Kurze Erklärung..." className="w-full p-3 rounded-xl bg-slate-100 border-none text-sm min-h-[80px] focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
-                <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition disabled:opacity-50">
+                <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-xl shadow-blue-100 disabled:opacity-50">
                   {isSubmitting ? <Loader2 className="animate-spin mx-auto" /> : 'Katalog-Eintrag speichern'}
                 </button>
               </form>

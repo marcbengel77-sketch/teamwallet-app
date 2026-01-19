@@ -42,7 +42,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
       setRecords(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PenaltyRecord)).sort((a, b) => b.date.localeCompare(a.date)));
     });
     const unsubTrans = onSnapshot(collection(db, `teams/${activeTeamId}/transactions`), (snapshot) => {
-      setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)).sort((a, b) => b.date.localeCompare(a.date)));
+      setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)).sort((a, b) => a.date.localeCompare(b.date)));
     });
     const unsubCats = onSnapshot(collection(db, `teams/${activeTeamId}/catalog`), (snapshot) => {
       setCategories(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PenaltyCategory)));
@@ -121,6 +121,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
     addToast(newStatus === 'paid' ? "Zahlung erfasst!" : "Wieder auf Offen gesetzt.");
   };
 
+  const copyInviteLink = () => {
+    const link = `${window.location.origin}/join/${activeTeamId}`;
+    navigator.clipboard.writeText(link);
+    addToast("Einladungslink kopiert!", "success");
+  };
+
   const isAdmin = role === 'admin' || role === 'vice-admin';
 
   return (
@@ -132,6 +138,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
         </div>
         {isAdmin && (
           <div className="flex gap-2 w-full sm:w-auto">
+            <button 
+              onClick={copyInviteLink}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-50 transition shadow-sm"
+            >
+              <UserPlus size={18} className="text-blue-600" />
+              <span>Einladen</span>
+            </button>
             <button 
               onClick={() => setShowAddModal('expense')}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-red-50 hover:text-red-600 transition shadow-sm"
@@ -157,7 +170,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
         <KpiCard icon={<CreditCard />} label="Dein Deckel" value={stats.personalOpen} color="blue" highlight />
       </div>
 
-      {/* AI, Tabs and Content similar to before but with optimized transaction display */}
+      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden group">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <Sparkles size={24} className={isGeneratingReport ? "animate-spin" : ""} />
+              <h2 className="text-xl font-bold tracking-tight">Wochenbericht der Schande</h2>
+            </div>
+            <p className="text-blue-50 text-sm max-w-md leading-relaxed">Lass die KI einen humorvollen Bericht für euren Team-Chat erstellen.</p>
+          </div>
+          <button 
+            onClick={async () => {
+              setIsGeneratingReport(true);
+              setAiReport(null);
+              try {
+                const report = await generateAIWeeklyReport(records, transactions);
+                setAiReport(report);
+                addToast("Bericht erstellt!", "success");
+              } catch (e) {
+                addToast("Fehler bei KI-Analyse.", "error");
+              } finally { setIsGeneratingReport(false); }
+            }}
+            disabled={isGeneratingReport}
+            className="bg-white text-blue-700 px-6 py-3 rounded-xl font-bold hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center gap-2 disabled:opacity-70 whitespace-nowrap"
+          >
+            {isGeneratingReport ? <Loader2 className="animate-spin" size={18} /> : 'KI-Bericht erstellen'}
+          </button>
+        </div>
+      </div>
+
+      {aiReport && (
+        <div className="bg-white p-6 rounded-2xl border-2 border-blue-100 shadow-sm animate-in zoom-in-95 duration-300">
+          <div className="flex justify-between items-center mb-4 pb-4 border-b">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2 italic"><Sparkles size={16} className="text-blue-500" /> Der Kassenwart spricht...</h3>
+            <button onClick={() => setAiReport(null)} className="p-1 hover:bg-slate-100 rounded-full transition"><X size={18} /></button>
+          </div>
+          <div className="text-slate-700 leading-relaxed italic whitespace-pre-line text-sm md:text-base">"{aiReport}"</div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex border-b bg-slate-50/30">
           <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')} label="Sünden" />
@@ -167,7 +218,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
         <div className="p-4 md:p-6">
           {activeTab === 'transactions' && (
             <div className="space-y-3">
-              {transactions.length > 0 ? transactions.map(t => (
+              {[...transactions].reverse().map(t => (
                 <div key={t.id} className="p-4 rounded-xl border border-slate-50 bg-white flex items-center justify-between hover:shadow-md transition">
                   <div className="flex items-center gap-4">
                     <div className={`p-2.5 rounded-xl ${t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
@@ -182,7 +233,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
                     {t.type === 'income' ? '+' : '-'}{t.amount.toFixed(2)}€
                   </p>
                 </div>
-              )) : <div className="text-center py-12 text-slate-400 italic">Keine Bewegungen auf dem Konto.</div>}
+              ))}
             </div>
           )}
           {activeTab === 'history' && (
@@ -190,16 +241,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
                 {records.map(record => (
                   <div key={record.id} className="p-3 rounded-xl border border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img src={record.userAvatar} className="w-10 h-10 rounded-full object-cover" />
+                      <img src={record.userAvatar} className="w-10 h-10 rounded-full object-cover shadow-sm" />
                       <div>
                         <p className="font-bold text-slate-800 text-sm">{record.userName}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">{record.categoryName}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{record.categoryName} • {record.date}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <p className={`font-black ${record.status === 'paid' ? 'text-green-600' : 'text-red-600'}`}>{record.amount.toFixed(2)}€</p>
                       {isAdmin && (
-                        <button onClick={() => togglePaidStatus(record.id)} className={`p-2 rounded-lg ${record.status === 'paid' ? 'bg-slate-100 text-slate-400' : 'bg-blue-50 text-blue-600'}`}>
+                        <button onClick={() => togglePaidStatus(record.id)} className={`p-2 rounded-lg transition ${record.status === 'paid' ? 'bg-slate-100 text-slate-400' : 'bg-blue-50 text-blue-600 hover:bg-green-50'}`}>
                           <Check size={16} />
                         </button>
                       )}
@@ -208,11 +259,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
                 ))}
              </div>
           )}
-          {activeTab === 'stats' && <Statistics records={records} />}
+          {activeTab === 'stats' && <Statistics records={records} transactions={transactions} />}
         </div>
       </div>
 
-      {/* Modals */}
       {showAddModal === 'penalty' && (
         <Modal title="Strafe vergeben" onClose={() => setShowAddModal(null)}>
           <form onSubmit={handleAddPenalty} className="space-y-4">
@@ -242,7 +292,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ activeTeamId, currentUser,
   );
 };
 
-// Internal components for clean code
 const Modal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode }> = ({ title, onClose, children }) => (
   <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
     <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95">

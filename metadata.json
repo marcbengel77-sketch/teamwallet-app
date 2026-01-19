@@ -1,5 +1,5 @@
-
 {
   "name": "TeamWallet",
-  "description": "A modern multi-team fund management application for sports teams and clubs, featuring fine management, statistics, and AI-powered weekly reports."
+  "description": "A modern multi-team fund management application for sports teams and clubs, featuring fine management, statistics, and AI-powered weekly reports.",
+  "requestFramePermissions": []
 }
