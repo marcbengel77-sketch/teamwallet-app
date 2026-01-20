@@ -1,0 +1,19 @@
+# Sensible Daten (API Keys, Passwörter)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Abhängigkeiten (werden über npm/yarn installiert, nicht hochgeladen)
+node_modules/
+
+# Build-Dateien (Vercel & Next.js)
+.next/
+out/
+build/
+dist/
+
+# Betriebssystem-spezifische Dateien
+.DS_Store
+Thumbs.db
