@@ -1,0 +1,8 @@
+{
+  "name": "TeamWallet",
+  "description": "Eine moderne, intuitive und mobilfreundliche Webanwendung zur Verwaltung von Mannschaftskassen. Unterstützt Multi-Team-Fähigkeit mit Firebase als Backend.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}
