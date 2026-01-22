@@ -1,81 +1,87 @@
 
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { User as FirebaseAuthUser } from 'firebase/auth';
-import { auth } from '../services/firebase';
-import { getCurrentUserProfile, updateUserProfileData } from '../services/authService';
-import { UserProfile, AuthContextType } from '../types';
-import { PREMIUM_FEATURES } from '../constants';
+import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '../supabaseClient';
+import { AuthContextType, UserProfile } from '../types';
+import { signInWithEmail, signUpWithEmail, signInWithGoogle, signOut, getUserProfile, createOrUpdateUserProfile } from '../services/authService';
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<FirebaseAuthUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [sessionLoading, setSessionLoading] = useState<boolean>(true);
 
-  const isPremiumUser = userProfile?.isPremium || false;
-
-  const fetchUserProfile = useCallback(async (user: FirebaseAuthUser) => {
-    const profile = await getCurrentUserProfile(user.uid);
-    setUserProfile(profile);
-  }, []);
+  const refreshProfile = useCallback(async () => {
+    if (user) {
+      try {
+        const userProfile = await getUserProfile(user.id);
+        if (userProfile) {
+          setProfile(userProfile);
+        } else {
+          // If profile doesn't exist (e.g., first time Google login), create it
+          const newProfile = await createOrUpdateUserProfile(user.id, user.email || '', user.user_metadata.full_name || user.email);
+          setProfile(newProfile);
+        }
+      } catch (error) {
+        console.error('Error refreshing profile:', error);
+      }
+    } else {
+      setProfile(null);
+    }
+  }, [user]);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        await fetchUserProfile(user);
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setSessionLoading(true);
+      if (session?.user) {
+        setUser(session.user);
+        await refreshProfile();
       } else {
-        setUserProfile(null);
+        setUser(null);
+        setProfile(null);
       }
-      setLoading(false);
+      setSessionLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [fetchUserProfile]);
-
-  const logout = useCallback(async () => {
-    await auth.signOut();
-    setCurrentUser(null);
-    setUserProfile(null);
-  }, []);
-
-  const updateUserProfile = useCallback(async (displayName: string, avatarFile: File | null) => {
-    if (currentUser) {
-      setLoading(true);
-      try {
-        const updatedProfile = await updateUserProfileData(currentUser.uid, displayName, avatarFile);
-        setUserProfile(updatedProfile);
-        // Force Firebase Auth user object refresh if display name or photoURL updated directly on it
-        await currentUser.reload();
-        setCurrentUser(auth.currentUser); // Get the reloaded user object
-      } catch (error) {
-        console.error("Failed to update user profile:", error);
-        throw error;
-      } finally {
-        setLoading(false);
+    // Check initial session
+    const checkSession = async () => {
+      setSessionLoading(true);
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        await refreshProfile();
+      } else {
+        setUser(null);
+        setProfile(null);
       }
-    }
-  }, [currentUser]);
+      setSessionLoading(false);
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    checkSession();
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [refreshProfile]);
 
   const value = {
-    currentUser,
-    userProfile,
-    loading,
-    logout,
-    updateUserProfile,
-    isPremiumUser,
+    user,
+    profile,
+    sessionLoading,
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithGoogle,
+    signOut,
+    refreshProfile,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

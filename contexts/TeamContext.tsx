@@ -1,164 +1,108 @@
 
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { Team, TeamContextType, TeamMember } from '../types';
+import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useRef } from 'react';
+import { Team, Membership, UserRole, TeamContextType } from '../types';
 import { useAuth } from './AuthContext';
-import {
-  getUserTeams,
-  getTeamById,
-  getTeamMember,
-  updateTeamMemberLastSeen,
-  getUnreadNotificationsForUser
-} from '../services/firestoreService';
+import { getUserTeams, getUserMembershipForTeam, getTeamMemberships } from '../services/teamService';
 
-export const TeamContext = createContext<TeamContextType | undefined>(undefined);
+const TeamContext = createContext<TeamContextType | undefined>(undefined);
 
 interface TeamProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
-  const { currentUser, loading: authLoading } = useAuth();
-  const [userTeams, setUserTeams] = useState<Team[]>([]);
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const { user, sessionLoading } = useAuth();
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-  const [selectedTeamMembership, setSelectedTeamMembership] = useState<TeamMember | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [unreadNotifications, setUnreadNotifications] = useState<boolean>(false);
+  const [userTeams, setUserTeams] = useState<Team[]>([]);
+  const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState<boolean>(true);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  
+  // Ref um zu verhindern, dass refreshTeams sich selbst triggert
+  const isInitialMount = useRef(true);
 
-  const fetchUserTeams = useCallback(async () => {
-    if (currentUser) {
-      setLoading(true);
+  const refreshTeams = useCallback(async () => {
+    if (user) {
+      setLoadingTeams(true);
       try {
-        const teams = await getUserTeams(currentUser.uid);
+        const teams = await getUserTeams(user.id);
         setUserTeams(teams);
 
-        // Auto-select first team if no team is selected or previously selected team is no longer available
-        if (teams.length > 0 && (!selectedTeamId || !teams.some(team => team.id === selectedTeamId))) {
-          setSelectedTeamId(teams[0].id);
-        } else if (teams.length === 0) {
-          setSelectedTeamId(null);
+        if (teams.length > 0) {
+          // Nur setzen, wenn noch nichts ausgewählt ist oder das gewählte Team nicht mehr existiert
+          setSelectedTeam(prev => {
+            if (!prev || !teams.some(team => team.id === prev.id)) {
+              return teams[0];
+            }
+            return prev;
+          });
+        } else {
+          setSelectedTeam(null);
         }
-      } catch (err) {
-        setError("Failed to fetch user's teams.");
-        console.error(err);
+      } catch (error) {
+        console.error('Error fetching user teams:', error);
       } finally {
-        setLoading(false);
+        setLoadingTeams(false);
       }
     } else {
       setUserTeams([]);
-      setSelectedTeamId(null);
       setSelectedTeam(null);
-      setSelectedTeamMembership(null);
-      setLoading(false);
+      setLoadingTeams(false);
     }
-  }, [currentUser, selectedTeamId]);
+  }, [user]);
 
-  const fetchSelectedTeamData = useCallback(async () => {
-    if (selectedTeamId && currentUser) {
-      setLoading(true);
-      try {
-        const team = await getTeamById(selectedTeamId);
-        const membership = await getTeamMember(selectedTeamId, currentUser.uid);
-        setSelectedTeam(team);
-        setSelectedTeamMembership(membership);
+  useEffect(() => {
+    if (!sessionLoading) {
+      refreshTeams();
+    }
+  }, [user, sessionLoading, refreshTeams]);
 
-        if (!team || !membership) {
-            setError("Selected team or membership not found.");
-            setSelectedTeamId(null); // Clear selected team if not found
-            // Re-fetch user teams to potentially pick a new default
-            await fetchUserTeams();
+  useEffect(() => {
+    const fetchMembershipAndRole = async () => {
+      if (user && selectedTeam) {
+        try {
+          const membership = await getUserMembershipForTeam(user.id, selectedTeam.id);
+          setUserRole(membership ? membership.role : null);
+          
+          const memberships = await getTeamMemberships(selectedTeam.id);
+          setUserMemberships(memberships);
+        } catch (error) {
+          console.error('Error fetching team details:', error);
+          setUserRole(null);
+          setUserMemberships([]);
         }
-      } catch (err) {
-        setError("Failed to fetch selected team data.");
-        console.error(err);
-      } finally {
-        setLoading(false);
+      } else {
+        setUserRole(null);
+        setUserMemberships([]);
       }
-    } else {
-      setSelectedTeam(null);
-      setSelectedTeamMembership(null);
-      setLoading(false);
+    };
+
+    fetchMembershipAndRole();
+  }, [user, selectedTeam]);
+
+  const selectTeam = (teamId: string) => {
+    const team = userTeams.find(t => t.id === teamId);
+    if (team) {
+      setSelectedTeam(team);
     }
-  }, [selectedTeamId, currentUser, fetchUserTeams]);
-
-  const checkNotifications = useCallback(async () => {
-    if (selectedTeamId && currentUser) {
-      const hasUnread = await getUnreadNotificationsForUser(selectedTeamId, currentUser.uid);
-      setUnreadNotifications(hasUnread);
-    } else {
-      setUnreadNotifications(false);
-    }
-  }, [selectedTeamId, currentUser]);
-
-  const clearUnreadNotifications = useCallback(async () => {
-    setUnreadNotifications(false);
-    // Optionally, mark all current notifications as read in the backend
-    // This is handled by updateTeamMembershipLastSeen in specific pages.
-  }, []);
-
-  const updateTeamMembershipLastSeen = useCallback(async (type: 'dashboard' | 'fines' | 'expenses') => {
-    if (selectedTeamId && currentUser) {
-      await updateTeamMemberLastSeen(selectedTeamId, currentUser.uid, type);
-      // After updating, re-check notifications to reflect the change
-      await checkNotifications();
-    }
-  }, [selectedTeamId, currentUser, checkNotifications]);
-
-  useEffect(() => {
-    if (!authLoading) {
-      fetchUserTeams();
-    }
-  }, [authLoading, fetchUserTeams]);
-
-  useEffect(() => {
-    if (selectedTeamId && currentUser) {
-      fetchSelectedTeamData();
-      checkNotifications(); // Check notifications when team changes
-      const notificationInterval = setInterval(checkNotifications, 60000); // Check every minute
-      return () => clearInterval(notificationInterval);
-    }
-  }, [selectedTeamId, currentUser, fetchSelectedTeamData, checkNotifications]);
-
-  const selectTeam = useCallback((teamId: string) => {
-    setSelectedTeamId(teamId);
-    // Persist selected team ID in local storage or cookie if desired for reloads
-    localStorage.setItem('selectedTeamId', teamId);
-    setError(null); // Clear previous errors
-  }, []);
-
-  useEffect(() => {
-    // Attempt to load selected team from local storage on initial mount
-    const storedTeamId = localStorage.getItem('selectedTeamId');
-    if (storedTeamId) {
-        setSelectedTeamId(storedTeamId);
-    }
-  }, []);
-
-  const refetchTeams = useCallback(async () => {
-    await fetchUserTeams();
-    await fetchSelectedTeamData(); // Ensure selected team data is also fresh
-  }, [fetchUserTeams, fetchSelectedTeamData]);
-
-  const value = {
-    userTeams,
-    selectedTeamId,
-    selectedTeam,
-    selectedTeamMembership,
-    selectTeam,
-    loading: loading || authLoading,
-    error,
-    refetchTeams,
-    unreadNotifications,
-    clearUnreadNotifications,
-    updateTeamMembershipLastSeen,
   };
 
-  return (
-    <TeamContext.Provider value={value}>
-      {children}
-    </TeamContext.Provider>
-  );
+  const isAdmin = userRole === UserRole.Admin;
+  const isViceAdmin = userRole === UserRole.ViceAdmin || isAdmin;
+
+  const value = {
+    selectedTeam,
+    userTeams,
+    userMemberships,
+    selectTeam,
+    loadingTeams,
+    refreshTeams,
+    userRole,
+    isAdmin,
+    isViceAdmin,
+  };
+
+  return <TeamContext.Provider value={value}>{children}</TeamContext.Provider>;
 };
 
 export const useTeam = () => {

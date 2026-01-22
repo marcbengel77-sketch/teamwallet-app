@@ -1,113 +1,103 @@
 
-import { User as FirebaseAuthUser } from 'firebase/auth';
-import { Timestamp } from 'firebase/firestore';
-import { UserRole } from './constants';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
-// Re-export UserRole from constants to make it accessible through types.ts
-export { UserRole } from './constants';
-
-// Firebase User extends
 export interface UserProfile {
   id: string;
-  email: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-  createdAt: Timestamp;
-  isPremium?: boolean; // Added for premium features
+  full_name: string | null;
+  avatar_url: string | null;
+  email: string | null;
 }
 
 export interface Team {
   id: string;
   name: string;
-  logoUrl: string | null;
-  createdAt: Timestamp;
-  createdBy: string; // userId of the creator
+  season: string;
+  created_by: string;
+  is_premium: boolean;
+  created_at: string;
 }
 
-export interface TeamMember {
-  userId: string;
-  teamId: string;
+export enum UserRole {
+  Admin = 'admin',
+  ViceAdmin = 'vice_admin',
+  Member = 'member',
+}
+
+export enum MembershipStatus {
+  Active = 'active',
+  Inactive = 'inactive',
+  Pending = 'pending',
+}
+
+export interface Membership {
+  id: string;
+  user_id: string;
+  team_id: string;
   role: UserRole;
-  joinedAt: Timestamp;
-  // Last seen timestamp for notifications, specific to this member in this team
-  lastSeenDashboard: Timestamp;
-  lastSeenFines: Timestamp;
-  lastSeenExpenses?: Timestamp; // New field for expenses page notifications
+  status: MembershipStatus;
+  created_at: string;
+  user_profile?: UserProfile; // Joined profile data
 }
 
-export interface FineDefinition {
+export interface PenaltyCatalogItem {
   id: string;
-  teamId: string;
+  team_id: string;
   name: string;
-  description: string;
   amount: number;
-  createdAt: Timestamp;
+  created_at: string;
 }
 
-export enum FineStatus {
-  OPEN = 'open',
-  PAID = 'paid',
-}
-
-export interface Fine {
+export interface AssignedPenalty {
   id: string;
-  teamId: string;
-  fineDefId: string; // Reference to FineDefinition
-  memberId: string; // userId of the member who received the fine
-  amount: number; // Stored here to allow definition changes without affecting existing fines
-  reason: string; // Description from fine definition
-  status: FineStatus;
-  issuedAt: Timestamp;
-  issuedBy: string; // userId of the admin who issued it
-  paidAt?: Timestamp; // Only if status is PAID
+  team_id: string;
+  user_id: string; // The user who received the penalty
+  penalty_catalog_id: string | null;
+  date_assigned: string; // Date string (YYYY-MM-DD)
+  amount: number;
+  is_paid: boolean;
+  paid_at: string | null;
+  transaction_id: string | null;
+  created_at: string;
+  penalty_name?: string; // Joined from PenaltyCatalogItem
+  member_name?: string; // Joined from UserProfile
 }
 
 export enum TransactionType {
-  FINE_PAYMENT = 'fine_payment',
-  PAYOUT = 'payout',
+  PenaltyPayment = 'penalty_payment',
+  Deposit = 'deposit',
+  Withdrawal = 'withdrawal',
 }
 
-export interface Payout {
+export interface Transaction {
   id: string;
-  teamId: string;
+  team_id: string;
+  payer_id: string;
   amount: number;
-  purpose: string;
-  issuedAt: Timestamp;
-  issuedBy: string; // userId of the admin who issued it
+  type: TransactionType;
+  description: string | null;
+  created_at: string;
+  payer_name?: string; // Joined from UserProfile
 }
 
-export type Transaction = Fine | Payout;
-
-export interface InviteLink {
-  id: string;
-  teamId: string;
-  createdBy: string; // userId
-  createdAt: Timestamp;
-  expiresAt: Timestamp;
-  role: UserRole; // Role assigned to new members joining via this link
-  isValid: boolean;
-}
-
-// Context types
 export interface AuthContextType {
-  currentUser: FirebaseAuthUser | null;
-  userProfile: UserProfile | null;
-  loading: boolean;
-  logout: () => Promise<void>;
-  updateUserProfile: (displayName: string, avatarFile: File | null) => Promise<void>;
-  isPremiumUser: boolean; // Derived from userProfile
+  user: SupabaseUser | null;
+  profile: UserProfile | null;
+  sessionLoading: boolean;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 export interface TeamContextType {
-  userTeams: Team[];
-  selectedTeamId: string | null;
   selectedTeam: Team | null;
-  selectedTeamMembership: TeamMember | null;
+  userTeams: Team[];
+  userMemberships: Membership[];
   selectTeam: (teamId: string) => void;
-  loading: boolean;
-  error: string | null;
-  refetchTeams: () => Promise<void>;
-  unreadNotifications: boolean;
-  clearUnreadNotifications: () => Promise<void>;
-  updateTeamMembershipLastSeen: (type: 'dashboard' | 'fines' | 'expenses') => Promise<void>; // Added 'expenses' type
+  loadingTeams: boolean;
+  refreshTeams: () => Promise<void>;
+  userRole: UserRole | null;
+  isAdmin: boolean;
+  isViceAdmin: boolean;
 }

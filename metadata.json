@@ -1,8 +1,5 @@
 {
-  "name": "TeamWallet",
-  "description": "Eine moderne, intuitive und mobilfreundliche Webanwendung zur Verwaltung von Mannschaftskassen. Unterstützt Multi-Team-Fähigkeit mit Firebase als Backend.",
-  "requestFramePermissions": [
-    "microphone",
-    "geolocation"
-  ]
+  "name": "TeamWallet-1",
+  "description": "Eine professionelle Web-App zur Verwaltung von Mannschaftskassen für die Saison 2025/26. Mandantenfähig, mit Google OAuth2 und Email/Passwort Authentifizierung, powered by Supabase und React/TailwindCSS.",
+  "requestFramePermissions": []
 }

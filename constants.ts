@@ -1,18 +1,14 @@
 
-export enum UserRole {
-  MEMBER = 'member',
-  VICE_ADMIN = 'vice-admin',
-  ADMIN = 'admin',
-}
-
-export const APP_NAME = "TeamWallet";
-
-export const GENKIT_API_URL = "http://localhost:3400/generateWeeklyReport"; // Placeholder for your Genkit flow endpoint
-
-export const PREMIUM_FEATURES = {
-  GENKIT_REPORT: {
-    name: "AI Wochenbericht",
-    description: "Generiert einen humorvollen Wochenbericht über die Finanzaktivitäten deines Teams.",
-    isPremium: true,
+// Fix: Augment ImportMeta and define ImportMetaEnv for environment variables
+declare global {
+  interface ImportMeta {
+    readonly env: {
+      readonly VITE_SUPABASE_URL: string;
+      readonly VITE_SUPABASE_ANON_KEY: string;
+      // Add other environment variables here if needed
+    };
   }
 }
+
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
