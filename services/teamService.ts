@@ -51,7 +51,14 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
     throw error;
   }
 
-  return data.map((item: { team: Team }) => item.team);
+  if (!data) return [];
+
+  // Fix: Use any casting to avoid Supabase's incorrect type inference for the joined 'team' property.
+  // Sometimes Supabase infers to-one joins as arrays (any[]), so we check and extract the first element if needed.
+  return (data as any[]).map((item: any) => {
+    const teamData = item.team;
+    return (Array.isArray(teamData) ? teamData[0] : teamData) as Team;
+  }).filter((team): team is Team => !!team);
 }
 
 /**

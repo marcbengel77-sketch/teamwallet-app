@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
 import { Team, Membership, UserRole, TeamContextType } from '../types';
 import { useAuth } from './AuthContext';
 import { getUserTeams, getUserMembershipForTeam, getTeamMemberships } from '../services/teamService';
@@ -15,36 +15,33 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
-  const [loadingTeams, setLoadingTeams] = useState<boolean>(true);
+  const [loadingTeams, setLoadingTeams] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
 
   const refreshTeams = useCallback(async () => {
-    if (user) {
-      setLoadingTeams(true);
-      try {
-        const teams = await getUserTeams(user.id);
-        setUserTeams(teams);
-
-        if (teams && teams.length > 0) {
-          setSelectedTeam(prev => {
-            if (!prev || !teams.some(team => team.id === prev.id)) {
-              return teams[0];
-            }
-            return prev;
-          });
-        } else {
-          setSelectedTeam(null);
-        }
-      } catch (error) {
-        console.error('Error fetching user teams (check if memberships table exists):', error);
-        setUserTeams([]);
-        setSelectedTeam(null);
-      } finally {
-        setLoadingTeams(false);
-      }
-    } else {
+    if (!user) {
       setUserTeams([]);
       setSelectedTeam(null);
+      return;
+    }
+
+    setLoadingTeams(true);
+    try {
+      const teams = await getUserTeams(user.id);
+      setUserTeams(teams || []);
+
+      if (teams && teams.length > 0) {
+        setSelectedTeam(prev => {
+          if (prev && teams.some(t => t.id === prev.id)) return prev;
+          return teams[0];
+        });
+      } else {
+        setSelectedTeam(null);
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Teams:', error);
+      setUserTeams([]);
+    } finally {
       setLoadingTeams(false);
     }
   }, [user]);
@@ -56,37 +53,28 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   }, [user, sessionLoading, refreshTeams]);
 
   useEffect(() => {
-    const fetchMembershipAndRole = async () => {
+    const fetchTeamDetails = async () => {
       if (user && selectedTeam) {
         try {
-          const membership = await getUserMembershipForTeam(user.id, selectedTeam.id);
-          setUserRole(membership ? membership.role : null);
-          
-          const memberships = await getTeamMemberships(selectedTeam.id);
-          setUserMemberships(memberships);
+          const [membership, allMemberships] = await Promise.all([
+            getUserMembershipForTeam(user.id, selectedTeam.id),
+            getTeamMemberships(selectedTeam.id)
+          ]);
+          setUserRole(membership?.role || null);
+          setUserMemberships(allMemberships || []);
         } catch (error) {
-          console.error('Error fetching team details:', error);
-          setUserRole(null);
-          setUserMemberships([]);
+          console.error('Fehler beim Laden der Team-Details:', error);
         }
-      } else {
-        setUserRole(null);
-        setUserMemberships([]);
       }
     };
 
-    fetchMembershipAndRole();
+    fetchTeamDetails();
   }, [user, selectedTeam]);
 
   const selectTeam = (teamId: string) => {
     const team = userTeams.find(t => t.id === teamId);
-    if (team) {
-      setSelectedTeam(team);
-    }
+    if (team) setSelectedTeam(team);
   };
-
-  const isAdmin = userRole === UserRole.Admin;
-  const isViceAdmin = userRole === UserRole.ViceAdmin || isAdmin;
 
   const value = {
     selectedTeam,
@@ -96,8 +84,8 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
     loadingTeams,
     refreshTeams,
     userRole,
-    isAdmin,
-    isViceAdmin,
+    isAdmin: userRole === UserRole.Admin,
+    isViceAdmin: userRole === UserRole.Admin || userRole === UserRole.ViceAdmin,
   };
 
   return <TeamContext.Provider value={value}>{children}</TeamContext.Provider>;
@@ -106,7 +94,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
 export const useTeam = () => {
   const context = useContext(TeamContext);
   if (context === undefined) {
-    throw new Error('useTeam must be used within a TeamProvider');
+    throw new Error('useTeam muss innerhalb eines TeamProviders verwendet werden');
   }
   return context;
 };
