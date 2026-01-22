@@ -4,10 +4,9 @@ import { PenaltyCatalogItem, AssignedPenalty, TransactionType } from '../types';
 
 /**
  * Ruft alle Strafkatalog-Einträge für ein bestimmtes Team ab.
- * @param teamId Die UUID des Teams.
- * @returns {Promise<PenaltyCatalogItem[]>} Eine Liste der Strafkatalog-Einträge.
  */
 export async function getPenaltyCatalog(teamId: string): Promise<PenaltyCatalogItem[]> {
+  if (!supabase) return [];
   const { data, error } = await supabase
     .from('penalty_catalog')
     .select('*')
@@ -24,12 +23,9 @@ export async function getPenaltyCatalog(teamId: string): Promise<PenaltyCatalogI
 
 /**
  * Fügt einen neuen Eintrag zum Strafkatalog eines Teams hinzu.
- * @param teamId Die UUID des Teams.
- * @param name Der Name der Strafe.
- * @param amount Der Betrag der Strafe.
- * @returns {Promise<PenaltyCatalogItem>} Der neu erstellte Katalogeintrag.
  */
 export async function addPenaltyCatalogItem(teamId: string, name: string, amount: number): Promise<PenaltyCatalogItem> {
+  if (!supabase) throw new Error("Supabase nicht initialisiert");
   const { data, error } = await supabase
     .from('penalty_catalog')
     .insert({ team_id: teamId, name, amount })
@@ -45,12 +41,8 @@ export async function addPenaltyCatalogItem(teamId: string, name: string, amount
 }
 
 /**
- * Ruft alle zugewiesenen Strafen für ein Team ab, mit optionaler Filterung.
- * @param teamId Die UUID des Teams.
- * @param limit Optional: Begrenzt die Anzahl der Ergebnisse.
- * @param onlyPaid Optional: Zeigt nur bezahlte Strafen an.
- * @param onlyUnpaid Optional: Zeigt nur unbezahlte Strafen an.
- * @returns {Promise<AssignedPenalty[]>} Eine Liste der zugewiesenen Strafen.
+ * Ruft alle zugewiesenen Strafen für ein Team ab.
+ * Benutzt jetzt den Standard-Join ohne Alias, um Schema-Fehler zu vermeiden.
  */
 export async function getAssignedPenalties(
   teamId: string,
@@ -58,9 +50,13 @@ export async function getAssignedPenalties(
   onlyPaid?: boolean,
   onlyUnpaid?: boolean,
 ): Promise<AssignedPenalty[]> {
+  if (!supabase) return [];
+  
+  // Wir nutzen hier den Standard-Join profiles(...) statt member_name:profiles(...)
+  // Das ist robuster gegenüber Cache-Problemen.
   let query = supabase
     .from('penalties')
-    .select('*, penalty_catalog(name), member_name:profiles(full_name, email)')
+    .select('*, penalty_catalog(name), profiles(full_name, email)')
     .eq('team_id', teamId)
     .order('created_at', { ascending: false });
 
@@ -81,21 +77,15 @@ export async function getAssignedPenalties(
     throw error;
   }
 
-  return data.map((item: any) => ({
+  return (data as any[]).map((item: any) => ({
     ...item,
     penalty_name: item.penalty_catalog?.name || 'Unbekannte Strafe',
-    member_name: item.member_name?.full_name || item.member_name?.email || 'Unbekanntes Mitglied',
+    member_name: item.profiles?.full_name || item.profiles?.email || 'Unbekanntes Mitglied',
   }));
 }
 
 /**
  * Weist einem Spieler eine neue Strafe zu.
- * @param teamId Die UUID des Teams.
- * @param userId Die UUID des Spielers.
- * @param penaltyCatalogId Die UUID des Strafkatalog-Eintrags.
- * @param dateAssigned Das Datum der Strafe.
- * @param amount Der Betrag der Strafe (vom Katalog).
- * @returns {Promise<AssignedPenalty>} Die neu zugewiesene Strafe.
  */
 export async function assignPenalty(
   teamId: string,
@@ -104,6 +94,7 @@ export async function assignPenalty(
   dateAssigned: string,
   amount: number,
 ): Promise<AssignedPenalty> {
+  if (!supabase) throw new Error("Supabase nicht initialisiert");
   const { data, error } = await supabase
     .from('penalties')
     .insert({
@@ -114,7 +105,7 @@ export async function assignPenalty(
       amount: amount,
       is_paid: false,
     })
-    .select('*, penalty_catalog(name), member_name:profiles(full_name, email)')
+    .select('*, penalty_catalog(name), profiles(full_name, email)')
     .single();
 
   if (error) {
@@ -125,17 +116,15 @@ export async function assignPenalty(
   return {
     ...data,
     penalty_name: (data as any).penalty_catalog?.name || 'Unbekannte Strafe',
-    member_name: (data as any).member_name?.full_name || (data as any).member_name?.email || 'Unbekanntes Mitglied',
+    member_name: (data as any).profiles?.full_name || (data as any).profiles?.email || 'Unbekanntes Mitglied',
   };
 }
 
 /**
  * Markiert eine Strafe als bezahlt und erstellt eine Transaktion.
- * @param penaltyId Die UUID der Strafe.
- * @param payerId Die UUID des Zahlers (kann der bestrafte Spieler sein oder ein anderer).
- * @returns {Promise<void>}
  */
 export async function markPenaltyAsPaid(penaltyId: string, payerId: string): Promise<void> {
+  if (!supabase) throw new Error("Supabase nicht initialisiert");
   const { data: penalty, error: fetchError } = await supabase
     .from('penalties')
     .select('team_id, amount, user_id')
@@ -153,7 +142,6 @@ export async function markPenaltyAsPaid(penaltyId: string, payerId: string): Pro
 
   const { team_id, amount, user_id } = penalty;
 
-  // Erstelle eine Transaktion für die Bezahlung
   const { data: transaction, error: transactionError } = await supabase
     .from('transactions')
     .insert({
@@ -171,7 +159,6 @@ export async function markPenaltyAsPaid(penaltyId: string, payerId: string): Pro
     throw transactionError;
   }
 
-  // Markiere die Strafe als bezahlt und verknüpfe die Transaktion
   const { error: updateError } = await supabase
     .from('penalties')
     .update({
@@ -183,7 +170,6 @@ export async function markPenaltyAsPaid(penaltyId: string, payerId: string): Pro
 
   if (updateError) {
     console.error('Error marking penalty as paid:', updateError);
-    // Transaktion rückgängig machen, falls das Update fehlschlägt
     await supabase.from('transactions').delete().eq('id', transaction.id);
     throw updateError;
   }
@@ -191,13 +177,12 @@ export async function markPenaltyAsPaid(penaltyId: string, payerId: string): Pro
 
 /**
  * Ruft den aktuellen Kassenstand und die Summe der offenen Strafen ab.
- * @param teamId Die UUID des Teams.
- * @returns {Promise<{ cashBalance: number; openPenaltiesAmount: number; }>}
  */
 export async function getTeamFinancialSummary(
   teamId: string,
 ): Promise<{ cashBalance: number; openPenaltiesAmount: number }> {
-  // Aktueller Kassenstand: Summe aller Transaktionen
+  if (!supabase) return { cashBalance: 0, openPenaltiesAmount: 0 };
+  
   const { data: transactionsData, error: transactionsError } = await supabase
     .from('transactions')
     .select('amount, type')
@@ -221,7 +206,6 @@ export async function getTeamFinancialSummary(
     }, 0);
   }
 
-  // Summe der offenen Strafen (Soll)
   const { data: openPenaltiesData, error: openPenaltiesError } = await supabase
     .from('penalties')
     .select('amount')
