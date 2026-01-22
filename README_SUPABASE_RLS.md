@@ -1,18 +1,19 @@
 
-# Supabase Setup Guide
+# Supabase Datenbank Setup
 
-BITTE NUR DEN SQL-CODE KOPIEREN, NICHT DIE TEXT-ZEILEN ODER ÜBERSCHRIFTEN!
+Gehe so vor:
 
-Um die Datenbank einzurichten:
-1. Öffne dein Supabase Dashboard.
-2. Gehe links auf **SQL Editor**.
-3. Klicke auf **New Query**.
-4. Kopiere den Inhalt der Datei `setup.sql` (die ich gerade für dich erstellt habe) und füge ihn dort ein.
-5. Drücke auf **Run**.
+1.  Logge dich bei [Supabase](https://supabase.com) ein.
+2.  Wähle dein Projekt aus.
+3.  Klicke in der linken Sidebar auf das Symbol mit dem **SQL Editor** (`>_`).
+4.  Klicke auf **"+ New Query"**.
+5.  Kopiere den Inhalt der Datei `setup.sql` hier aus dem Projekt komplett hinein.
+6.  Klicke unten rechts auf den grünen **"Run"** Button.
 
-Die Datei `setup.sql` enthält alles Notwendige:
-- Alle Datenbank-Tabellen
-- Den Trigger für automatische Profile
-- Die Sicherheitsregeln (RLS), damit du Teams erstellen kannst
-
-Wenn du danach immer noch den Fehler `new row violates row-level security policy` beim Erstellen eines Teams siehst, stelle sicher, dass du den Block unter **4. POLICIES** in der `setup.sql` wirklich ausgeführt hast.
+### Wenn die Fehlermeldung in der App bleibt:
+In Supabase:
+1.  Gehe auf **Settings** (Zahnrad ganz unten links).
+2.  Klicke auf **API**.
+3.  Suche die Sektion **PostgREST** (oder scrolle ganz nach unten).
+4.  Dort gibt es einen Button **"Reload Schema"**. Klicke ihn.
+5.  Falls du ihn nicht findest: Der Code in `setup.sql` versucht diesen Refresh bereits automatisch am Ende durchzuführen.
