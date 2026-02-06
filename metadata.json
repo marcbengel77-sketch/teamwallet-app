@@ -1,0 +1,7 @@
+{
+  "name": "TeamWallet",
+  "description": "Eine professionelle Web-App zur Verwaltung von Mannschaftskassen für die Saison 2025/26. Mandantenfähig, mit Google OAuth2 und Email/Passwort Authentifizierung, powered by Supabase und React/TailwindCSS.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
